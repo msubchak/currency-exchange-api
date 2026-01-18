@@ -1,5 +1,6 @@
 import os
 import requests
+from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from datetime import date
 from rest_framework import viewsets, mixins, status
@@ -9,7 +10,11 @@ from rest_framework.exceptions import APIException
 from rest_framework.response import Response
 from rest_framework.exceptions import ValidationError
 from currency.models import CurrencyExchange, UserBalance
-from currency.serializers import CurrencyExchangeSerializer, RegisterSerializer, BalanceSerializer, HistorySerializer
+from currency.serializers import (
+    CurrencyExchangeSerializer,
+    RegisterSerializer,
+    BalanceSerializer,
+    HistorySerializer)
 from dotenv import load_dotenv
 
 
@@ -19,7 +24,25 @@ API_KEY = os.getenv("EXCHANGE_API_KEY")
 
 
 def get_exchange_rate(currency_code: str) -> float:
-    pass
+    URL = (
+        f"https://v6.exchangerate-api.com/v6/{API_KEY}"
+        f"/pair/{currency_code.upper()}/UAH"
+    )
+
+    try:
+        response = requests.get(URL)
+        data = response.json()
+    except requests.exceptions.RequestException:
+        raise APIException("External exchange service is unavailable.")
+
+    if data.get("result") != "success":
+        error_type = data.get("error-type", "unknown_error")
+        raise ValidationError({
+            "currency_code": f"Invalid currency "
+                             f"code or API error: {error_type}"
+        })
+
+    return data.get("conversion_rate")
 
 
 class CurrencyViewSet(
@@ -37,25 +60,24 @@ class CurrencyViewSet(
         currency_code = request.data.get("currency_code", "").upper()
 
         if not currency_code:
-            return Response(
-                {"error": "currency code is required"},
-                status=status.HTTP_400_BAD_REQUEST,
+            raise ValidationError(
+                {"currency_code": "currency code is required"}
             )
 
         today = date.today()
-        limit = CurrencyExchange.objects.filter(user=self.request.user, created_at__date=today).count()
-        if limit > 100:
-            return Response(
+        limit = CurrencyExchange.objects.filter(
+            user=self.request.user,
+            created_at__date=today
+        ).count()
+        if limit >= 100:
+            raise ValidationError(
                 {"error": "Daily request limit reached"},
-                status=status.HTTP_429_TOO_MANY_REQUESTS,
+                code=429
             )
 
         balance = UserBalance.objects.get(user=self.request.user)
         if balance.balance <= 0:
-            return Response(
-                {"error": "Not enough money"},
-                status=status.HTTP_403_FORBIDDEN
-            )
+            raise PermissionDenied("Not enough money")
 
         rate = get_exchange_rate(currency_code)
 
@@ -70,7 +92,7 @@ class CurrencyViewSet(
             )
 
         serializer = self.get_serializer(currency)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
 class HistoryViewSet(
@@ -87,13 +109,13 @@ class HistoryViewSet(
         queryset = queryset.filter(user=user)
 
         currency = self.request.query_params.get("currency_code")
-        date = self.request.query_params.get("created_at")
+        date_param = self.request.query_params.get("created_at")
 
         if currency:
             queryset = queryset.filter(currency_code=currency)
 
         if date:
-            queryset = queryset.filter(created_at__date=date)
+            queryset = queryset.filter(created_at__date=date_param)
 
         return queryset
 

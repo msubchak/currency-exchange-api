@@ -22,10 +22,21 @@ from rest_framework_simplejwt.views import (
     TokenRefreshView,
 )
 
-
 urlpatterns = [
     path("admin/", admin.site.urls),
-    path("api/v1/currency/", include(("currency.urls", "currencies"), namespace="currencies")),
-    path("api/token/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
-    path("api/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
+    path(
+        "api/v1/exchanges/",
+        include(("currency.urls", "currencies"),
+                namespace="currencies")
+    ),
+    path(
+        "api/token/",
+        TokenObtainPairView.as_view(),
+        name="token_obtain_pair"
+    ),
+    path(
+        "api/token/refresh/",
+        TokenRefreshView.as_view(),
+        name="token_refresh"
+    ),
 ]
