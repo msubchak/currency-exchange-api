@@ -59,7 +59,7 @@ class AuthenticatedCurrencyApiTests(AuthenticatedApiTestCase):
         )
 
     def test_currency_limit(self):
-        for _ in range(101):
+        for _ in range(1500):
             CurrencyExchange.objects.create(
                 user=self.user,
                 currency_code="USD",
@@ -71,7 +71,7 @@ class AuthenticatedCurrencyApiTests(AuthenticatedApiTestCase):
         res = self.client.post(CURRENCY_LIST_URL, data=payload)
 
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(res.data["error"], "Daily request limit reached")
+        self.assertEqual(res.data["error"], "Monthly request limit reached")
 
     @patch("currency.views.get_exchange_rate")
     def test_currency_exchange_wrong_code(self, mock_rate):

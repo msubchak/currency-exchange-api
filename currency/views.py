@@ -67,11 +67,12 @@ class CurrencyViewSet(
         today = date.today()
         limit = CurrencyExchange.objects.filter(
             user=self.request.user,
-            created_at__date=today
+            created_at__year=today.year,
+            created_at__month=today.month,
         ).count()
-        if limit >= 100:
+        if limit >= 1500:
             raise ValidationError(
-                {"error": "Daily request limit reached"},
+                {"error": "Monthly request limit reached"},
                 code=429
             )
 
@@ -114,7 +115,7 @@ class HistoryViewSet(
         if currency:
             queryset = queryset.filter(currency_code=currency)
 
-        if date:
+        if date_param:
             queryset = queryset.filter(created_at__date=date_param)
 
         return queryset
